@@ -70,6 +70,7 @@ class GameMonitor {
   private wallet: ethers.Wallet;
   private leaguePool: ethers.Contract;
   private processedGames: Set<string>;
+  private isFirstRun: boolean;
 
   constructor() {
     this.provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL);
@@ -80,6 +81,7 @@ class GameMonitor {
       this.wallet
     );
     this.processedGames = new Set<string>();
+    this.isFirstRun = true;
   }
 
   async fetchNFLScores(): Promise<Game[]> {
@@ -125,6 +127,13 @@ class GameMonitor {
       const tokenName = TEAM_TOKENS[winnerName];
       if (!tokenName) {
         console.error(`No token name mapping found for winner: ${winnerName}`);
+        continue;
+      }
+
+      // On first run, just mark completed games as processed without calling contract
+      if (this.isFirstRun) {
+        console.log(`📋 Skipping already-completed game: ${game.name} (Winner: ${winnerName})`);
+        this.processedGames.add(game.id);
         continue;
       }
 
@@ -178,6 +187,12 @@ class GameMonitor {
       console.log(`Found ${games.length} games this week`);
 
       await this.processCompletedGames(games);
+
+      // After first run, start processing new completions
+      if (this.isFirstRun) {
+        this.isFirstRun = false;
+        console.log('✅ Initialization complete. Now monitoring for new game completions...\n');
+      }
 
       // Check balance periodically
       const currentBalance = await this.wallet.getBalance();
