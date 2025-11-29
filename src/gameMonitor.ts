@@ -102,6 +102,7 @@ interface Game {
     competitors: Array<{
       team: {
         displayName: string;
+        name: string;
       };
       score: string;
       homeAway: string;
@@ -293,7 +294,6 @@ https://etherscan.io/tx/${twapTxHash}`;
 
             // Parse the transaction to get burned tokens
             const deadAddress = '0x000000000000000000000000000000000000dEaD';
-            const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, this.wallet);
             const decimals = await tokenContract.decimals();
 
             // Find Transfer event to dead address
