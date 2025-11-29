@@ -1,6 +1,7 @@
 import { ethers } from 'ethers';
 import axios from 'axios';
 import * as dotenv from 'dotenv';
+import { TwitterApi } from 'twitter-api-v2';
 
 dotenv.config();
 
@@ -82,9 +83,11 @@ const LEAGUE_POOL_ABI = [
   'function forwardFeesToBC(string memory tokenName) external',
 ];
 
-// Token contract ABI (for processTokenTwap)
+// Token contract ABI (for processTokenTwap and events)
 const TOKEN_ABI = [
   'function processTokenTwap() external',
+  'function decimals() view returns (uint8)',
+  'event Transfer(address indexed from, address indexed to, uint256 value)',
 ];
 
 interface Game {
@@ -112,6 +115,7 @@ class GameMonitor {
   private leaguePool: ethers.Contract;
   private processedGames: Set<string>;
   private isFirstRun: boolean;
+  private twitterClient: TwitterApi | null;
 
   constructor() {
     this.provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL);
@@ -123,6 +127,21 @@ class GameMonitor {
     );
     this.processedGames = new Set<string>();
     this.isFirstRun = true;
+
+    // Initialize Twitter client if credentials are provided
+    if (process.env.TWITTER_APP_KEY && process.env.TWITTER_APP_SECRET &&
+        process.env.TWITTER_ACCESS_TOKEN && process.env.TWITTER_ACCESS_SECRET) {
+      this.twitterClient = new TwitterApi({
+        appKey: process.env.TWITTER_APP_KEY,
+        appSecret: process.env.TWITTER_APP_SECRET,
+        accessToken: process.env.TWITTER_ACCESS_TOKEN,
+        accessSecret: process.env.TWITTER_ACCESS_SECRET,
+      });
+      console.log('✅ Twitter client initialized');
+    } else {
+      this.twitterClient = null;
+      console.log('⚠️  Twitter credentials not found, tweets will be skipped');
+    }
   }
 
   async fetchNFLScores(): Promise<Game[]> {
@@ -158,6 +177,40 @@ class GameMonitor {
 
     // Fallback to 1 gwei if API fails
     return ethers.utils.parseUnits('1', 'gwei');
+  }
+
+  async postGameResultTweet(game: Game, winnerName: string, twapTxHash: string, tokensBurned: string) {
+    if (!this.twitterClient) {
+      console.log('📱 Twitter not configured, skipping tweet');
+      return;
+    }
+
+    try {
+      const competition = game.competitions[0];
+      const [team1, team2] = competition.competitors;
+
+      // Determine winner and loser
+      const score1 = parseInt(team1.score);
+      const score2 = parseInt(team2.score);
+      const winner = score1 > score2 ? team1 : team2;
+      const loser = score1 > score2 ? team2 : team1;
+      const winnerScore = score1 > score2 ? score1 : score2;
+      const loserScore = score1 > score2 ? score2 : score1;
+
+      // Get team names without city (e.g., "Bears" from "Chicago Bears")
+      const winnerTeamName = winner.team.name;
+      const loserTeamName = loser.team.name;
+
+      const tweet = `${winnerName} ${winnerTeamName} defeat the ${loserTeamName} ${winnerScore}-${loserScore}, triggering a buyback-and-burn of ${tokensBurned} ${winnerName} tokens!
+
+https://etherscan.io/tx/${twapTxHash}`;
+
+      console.log('📱 Posting to X:', tweet);
+      await this.twitterClient.v2.tweet(tweet);
+      console.log('✅ Tweet posted successfully!');
+    } catch (error: any) {
+      console.error('❌ Failed to post tweet:', error.message);
+    }
   }
 
   getWinner(game: Game): string | null {
@@ -237,6 +290,30 @@ class GameMonitor {
             const twapReceipt = await twapTx.wait();
             console.log(`✅ processTokenTwap confirmed in block ${twapReceipt.blockNumber}`);
             console.log(`Gas used: ${twapReceipt.gasUsed.toString()}`);
+
+            // Parse the transaction to get burned tokens
+            const deadAddress = '0x000000000000000000000000000000000000dEaD';
+            const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, this.wallet);
+            const decimals = await tokenContract.decimals();
+
+            // Find Transfer event to dead address
+            let tokensBurned = '0';
+            for (const log of twapReceipt.logs) {
+              try {
+                const parsed = tokenContract.interface.parseLog(log);
+                if (parsed.name === 'Transfer' && parsed.args.to.toLowerCase() === deadAddress.toLowerCase()) {
+                  const burnedAmount = ethers.utils.formatUnits(parsed.args.value, decimals);
+                  // Round to whole number
+                  tokensBurned = Math.round(parseFloat(burnedAmount)).toLocaleString();
+                  break;
+                }
+              } catch (e) {
+                // Not a token contract log, skip
+              }
+            }
+
+            // Post to X/Twitter
+            await this.postGameResultTweet(game, winnerName, twapTx.hash, tokensBurned);
           } catch (twapError: any) {
             // It's OK if TWAP fails (delay not met, no ETH to TWAP, etc.)
             console.warn(`⚠️  processTokenTwap failed (this is normal): ${twapError.message}`);
