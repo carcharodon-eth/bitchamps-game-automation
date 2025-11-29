@@ -41,9 +41,50 @@ const TEAM_TOKENS: Record<string, string> = {
   'Washington Commanders': 'Washington',
 };
 
+// Token contract addresses for each team
+const TOKEN_ADDRESSES: Record<string, string> = {
+  'Atlanta': '0x175E58268B208831aDB3025120686E8FD77579a6',
+  'Arizona': '0xc9e4A69745867eeEb968b6Cb9d1e1F64e297Be97',
+  'Baltimore': '0x736DAF2b3ba7ab3ab676c275B01e1455492141a9',
+  'Buffalo': '0xF72B1D2E4f86F73254c62BF83096a8562eF1065f',
+  'Carolina': '0xe749f9DEeA902845275B7ea1c8dBFe20DF4e0A3C',
+  'Cincinnati': '0x1311afe2b1dF1F4Aca36DA81c3D15b4D42D2e830',
+  'Cleveland': '0xbFE9bc70d905649C30449EaDFcADD27e33d2Fbb6',
+  'Dallas': '0x9E32a40b7E872DB2d56eBF36D8E050d3b2b0143e',
+  'Denver': '0x79aa64275f10061C83546960D871b12903e1A57D',
+  'Detroit': '0x522Ac1995A7273fA5DD00e4A96e8f83E585FB778',
+  'Green Bay': '0xe678d2282c45A27C2878577271175e51AE3E0d99',
+  'Houston': '0x95798093b11BEfE217A1221314506Bb04773F8Ac',
+  'Indianapolis': '0x63000C40a6aD1cb6aBAe664BD028f98B586F969b',
+  'Jacksonville': '0x8091d014C2743870b31f20C4Da795a8b23620B5D',
+  'Kansas City': '0x4856EA3E36d60215ca439629638eabaE9a30998E',
+  'Las Vegas': '0x9DbDfCE305c96CBD520BEe7cDF2CdBf6e30e66A7',
+  'Los Angeles (C)': '0x7DBD9Ee9d870F302404E0C1507e7B266D08C2458',
+  'Los Angeles (R)': '0xd382b5EFb38f36E9B40CCfc1B9d32acB66B6c886',
+  'Miami': '0xaF8076d8c467B9BdA6D473d36fc4EC5adfA9A570',
+  'Minnesota': '0xb0424042729c539c1a4AdDabc4e16F28b7CB1eAb',
+  'New England': '0x675e3840C2aDAeC6928A2BfCE5129d48B36A93C6',
+  'New Orleans': '0xD3C20d290f17E4e794fF50De11A05c7515e5937F',
+  'New York (G)': '0x28CE5e130F8902f05131E073fe252444E2743c09',
+  'New York (J)': '0xC2E12Df44b37a2e08BA9bcdFc30e2DFe0844419b',
+  'Philadelphia': '0x60ec0C6c60eEe5c3fFD7446dC369C5D7b85e4F1D',
+  'Pittsburgh': '0xaA7512FA3C6f058d483A84Fb2014E0Fe22bd5537',
+  'San Francisco': '0x6E9A75c723a6779cCe7E3bBA736B1fB2C1C52374',
+  'Seattle': '0x8D6760aAd1De89c0e99b4b9c3212a7309d20E788',
+  'Tampa Bay': '0x5838Ab7C82DF653c74F235DA01BD9bdED1f10c59',
+  'Tennessee': '0xFb18c2bC04105474FDA0B969985Ded7A87EEb228',
+  'Washington': '0x1E0249A94Bc08388884F32DB1f8D456220698fCd',
+  'Chicago': '0xE57352F339598c61c99B3a00F1E6D7473774b3d9',
+};
+
 // LeaguePool ABI (minimal - just the function we need)
 const LEAGUE_POOL_ABI = [
   'function forwardFeesToBC(string memory tokenName) external',
+];
+
+// Token contract ABI (for processTokenTwap)
+const TOKEN_ABI = [
+  'function processTokenTwap() external',
 ];
 
 interface Game {
@@ -176,8 +217,31 @@ class GameMonitor {
         console.log('Waiting for confirmation...');
 
         const receipt = await tx.wait();
-        console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
+        console.log(`✅ forwardFeesToBC confirmed in block ${receipt.blockNumber}`);
         console.log(`Gas used: ${receipt.gasUsed.toString()}`);
+
+        // Now call processTokenTwap on the winning team's token contract
+        const tokenAddress = TOKEN_ADDRESSES[tokenName];
+        if (tokenAddress) {
+          try {
+            console.log(`\n💰 Calling processTokenTwap on ${tokenName} token...`);
+            const tokenContract = new ethers.Contract(tokenAddress, TOKEN_ABI, this.wallet);
+
+            const twapTx = await tokenContract.processTokenTwap({
+              gasPrice: gasPrice,
+            });
+
+            console.log(`TWAP transaction sent: ${twapTx.hash}`);
+            console.log('Waiting for TWAP confirmation...');
+
+            const twapReceipt = await twapTx.wait();
+            console.log(`✅ processTokenTwap confirmed in block ${twapReceipt.blockNumber}`);
+            console.log(`Gas used: ${twapReceipt.gasUsed.toString()}`);
+          } catch (twapError: any) {
+            // It's OK if TWAP fails (delay not met, no ETH to TWAP, etc.)
+            console.warn(`⚠️  processTokenTwap failed (this is normal): ${twapError.message}`);
+          }
+        }
 
         // Mark as processed
         this.processedGames.add(game.id);
