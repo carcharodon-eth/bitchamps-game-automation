@@ -4,45 +4,46 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-// Token address mapping (same as your app config)
+// Team name mapping: ESPN full names -> Token short names
+// forwardFeesToBC expects the short token name as a string parameter
 const TEAM_TOKENS: Record<string, string> = {
-  'Atlanta Falcons': '0x175e58268b208831adb3025120686e8fd77579a6',
-  'Arizona Cardinals': '0xc9e4A69745867eeEb968b6Cb9d1e1F64e297Be97',
-  'Baltimore Ravens': '0x736daf2b3ba7ab3ab676c275b01e1455492141a9',
-  'Buffalo Bills': '0xf72b1d2e4f86f73254c62bf83096a8562ef1065f',
-  'Carolina Panthers': '0xe749f9deea902845275b7ea1c8dbfe20df4e0a3c',
-  'Chicago Bears': '0xe57352f339598c61c99b3a00f1e6d7473774b3d9',
-  'Cincinnati Bengals': '0x1311afe2b1df1f4aca36da81c3d15b4d42d2e830',
-  'Cleveland Browns': '0xbfe9bc70d905649c30449eadfcadd27e33d2fbb6',
-  'Dallas Cowboys': '0x9e32a40b7e872db2d56ebf36d8e050d3b2b0143e',
-  'Denver Broncos': '0x79aa64275f10061c83546960d871b12903e1a57d',
-  'Detroit Lions': '0x522ac1995a7273fa5dd00e4a96e8f83e585fb778',
-  'Green Bay Packers': '0xe678d2282c45a27c2878577271175e51ae3e0d99',
-  'Houston Texans': '0x95798093b11befe217a1221314506bb04773f8ac',
-  'Indianapolis Colts': '0x63000c40a6ad1cb6abae664bd028f98b586f969b',
-  'Jacksonville Jaguars': '0x8091d014c2743870b31f20c4da795a8b23620b5d',
-  'Kansas City Chiefs': '0x4856ea3e36d60215ca439629638eabae9a30998e',
-  'Las Vegas Raiders': '0x9dbdfce305c96cbd520bee7cdf2cdbf6e30e66a7',
-  'Los Angeles Chargers': '0x7dbd9ee9d870f302404e0c1507e7b266d08c2458',
-  'Los Angeles Rams': '0xd382b5efb38f36e9b40ccfc1b9d32acb66b6c886',
-  'Miami Dolphins': '0xaf8076d8c467b9bda6d473d36fc4ec5adfa9a570',
-  'Minnesota Vikings': '0xb0424042729c539c1a4addabc4e16f28b7cb1eab',
-  'New England Patriots': '0x675e3840c2adaec6928a2bfce5129d48b36a93c6',
-  'New Orleans Saints': '0xd3c20d290f17e4e794ff50de11a05c7515e5937f',
-  'New York Giants': '0x28ce5e130f8902f05131e073fe252444e2743c09',
-  'New York Jets': '0xc2e12df44b37a2e08ba9bcdfc30e2dfe0844419b',
-  'Philadelphia Eagles': '0x60ec0c6c60eee5c3ffd7446dc369c5d7b85e4f1d',
-  'Pittsburgh Steelers': '0xaa7512fa3c6f058d483a84fb2014e0fe22bd5537',
-  'San Francisco 49ers': '0x6e9a75c723a6779cce7e3bba736b1fb2c1c52374',
-  'Seattle Seahawks': '0x8d6760aad1de89c0e99b4b9c3212a7309d20e788',
-  'Tampa Bay Buccaneers': '0x5838ab7c82df653c74f235da01bd9bded1f10c59',
-  'Tennessee Titans': '0xfb18c2bc04105474fda0b969985ded7a87eeb228',
-  'Washington Commanders': '0x1e0249a94bc08388884f32db1f8d456220698fcd',
+  'Atlanta Falcons': 'Atlanta',
+  'Arizona Cardinals': 'Arizona',
+  'Baltimore Ravens': 'Baltimore',
+  'Buffalo Bills': 'Buffalo',
+  'Carolina Panthers': 'Carolina',
+  'Chicago Bears': 'Chicago',
+  'Cincinnati Bengals': 'Cincinnati',
+  'Cleveland Browns': 'Cleveland',
+  'Dallas Cowboys': 'Dallas',
+  'Denver Broncos': 'Denver',
+  'Detroit Lions': 'Detroit',
+  'Green Bay Packers': 'Green Bay',
+  'Houston Texans': 'Houston',
+  'Indianapolis Colts': 'Indianapolis',
+  'Jacksonville Jaguars': 'Jacksonville',
+  'Kansas City Chiefs': 'Kansas City',
+  'Las Vegas Raiders': 'Las Vegas',
+  'Los Angeles Chargers': 'Los Angeles (C)',
+  'Los Angeles Rams': 'Los Angeles (R)',
+  'Miami Dolphins': 'Miami',
+  'Minnesota Vikings': 'Minnesota',
+  'New England Patriots': 'New England',
+  'New Orleans Saints': 'New Orleans',
+  'New York Giants': 'New York (G)',
+  'New York Jets': 'New York (J)',
+  'Philadelphia Eagles': 'Philadelphia',
+  'Pittsburgh Steelers': 'Pittsburgh',
+  'San Francisco 49ers': 'San Francisco',
+  'Seattle Seahawks': 'Seattle',
+  'Tampa Bay Buccaneers': 'Tampa Bay',
+  'Tennessee Titans': 'Tennessee',
+  'Washington Commanders': 'Washington',
 };
 
 // LeaguePool ABI (minimal - just the function we need)
 const LEAGUE_POOL_ABI = [
-  'function forwardFeesToBC(address bctoken) external',
+  'function forwardFeesToBC(string memory tokenName) external',
 ];
 
 interface Game {
@@ -121,23 +122,23 @@ class GameMonitor {
         continue;
       }
 
-      const winnerToken = TEAM_TOKENS[winnerName];
-      if (!winnerToken) {
-        console.error(`No token found for winner: ${winnerName}`);
+      const tokenName = TEAM_TOKENS[winnerName];
+      if (!tokenName) {
+        console.error(`No token name mapping found for winner: ${winnerName}`);
         continue;
       }
 
       console.log(`\n🏈 Processing completed game: ${game.name}`);
       console.log(`Winner: ${winnerName}`);
-      console.log(`Token: ${winnerToken}`);
+      console.log(`Token Name: ${tokenName}`);
 
       try {
         // Estimate gas first
-        const gasEstimate = await this.leaguePool.estimateGas.forwardFeesToBC(winnerToken);
+        const gasEstimate = await this.leaguePool.estimateGas.forwardFeesToBC(tokenName);
         console.log(`Estimated gas: ${gasEstimate.toString()}`);
 
         // Call forwardFeesToBC with 20% buffer
-        const tx = await this.leaguePool.forwardFeesToBC(winnerToken, {
+        const tx = await this.leaguePool.forwardFeesToBC(tokenName, {
           gasLimit: gasEstimate.mul(120).div(100),
         });
 
