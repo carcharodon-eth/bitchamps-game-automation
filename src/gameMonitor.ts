@@ -97,6 +97,28 @@ class GameMonitor {
     }
   }
 
+  async getCurrentGasPrice(): Promise<ethers.BigNumber> {
+    try {
+      // Fetch current gas prices from Etherscan Gas Tracker
+      const apiKey = process.env.ETHERSCAN_API_KEY || 'YourApiKeyToken';
+      const response = await axios.get(
+        `https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey=${apiKey}`
+      );
+
+      if (response.data.status === '1' && response.data.result) {
+        // Use SafeGasPrice (cheapest option that will confirm)
+        const safeGasPrice = response.data.result.SafeGasPrice;
+        console.log(`Current safe gas price: ${safeGasPrice} gwei`);
+        return ethers.utils.parseUnits(safeGasPrice, 'gwei');
+      }
+    } catch (error) {
+      console.warn('Failed to fetch gas price from Etherscan, using fallback');
+    }
+
+    // Fallback to 1 gwei if API fails
+    return ethers.utils.parseUnits('1', 'gwei');
+  }
+
   getWinner(game: Game): string | null {
     const competition = game.competitions[0];
     if (!competition) return null;
@@ -142,13 +164,12 @@ class GameMonitor {
       console.log(`Token Name: ${tokenName}`);
 
       try {
-        // Estimate gas first
-        const gasEstimate = await this.leaguePool.estimateGas.forwardFeesToBC(tokenName);
-        console.log(`Estimated gas: ${gasEstimate.toString()}`);
+        // Fetch current safe gas price from Etherscan
+        const gasPrice = await this.getCurrentGasPrice();
 
-        // Call forwardFeesToBC with 20% buffer
+        // Call forwardFeesToBC with low gas price
         const tx = await this.leaguePool.forwardFeesToBC(tokenName, {
-          gasLimit: gasEstimate.mul(120).div(100),
+          gasPrice: gasPrice,
         });
 
         console.log(`Transaction sent: ${tx.hash}`);
