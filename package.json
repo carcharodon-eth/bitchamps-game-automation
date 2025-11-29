@@ -1,0 +1,21 @@
+{
+  "name": "bitchamps-game-automation",
+  "version": "1.0.0",
+  "description": "Automated NFL game result tracking and LeaguePool distribution",
+  "main": "dist/gameMonitor.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/gameMonitor.js",
+    "dev": "ts-node src/gameMonitor.ts"
+  },
+  "dependencies": {
+    "ethers": "^5.7.2",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  }
+}
