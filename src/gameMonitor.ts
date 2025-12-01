@@ -160,36 +160,17 @@ class GameMonitor {
 
   async getCurrentGasPrice(): Promise<ethers.BigNumber> {
     try {
-      // Primary method: Use RPC provider's gas price (based on recent blocks)
+      // Fetch current gas price from RPC provider (based on recent blocks)
       const gasPrice = await this.provider.getGasPrice();
       const gasPriceGwei = ethers.utils.formatUnits(gasPrice, 'gwei');
       console.log(`Current network gas price: ${gasPriceGwei} gwei`);
       return gasPrice;
     } catch (error: any) {
-      console.warn(`Failed to fetch gas price from provider: ${error.message}`);
+      console.error(`Failed to fetch gas price from provider: ${error.message}`);
+      // Fallback to 1 gwei if RPC provider fails
+      console.warn('⚠️  Using fallback gas price of 1 gwei');
+      return ethers.utils.parseUnits('1', 'gwei');
     }
-
-    // Fallback: Try Etherscan API
-    try {
-      const apiKey = process.env.ETHERSCAN_API_KEY;
-      if (apiKey && apiKey !== 'YourApiKeyToken') {
-        const response = await axios.get(
-          `https://api.etherscan.io/api?module=gastracker&action=gasoracle&apikey=${apiKey}`
-        );
-
-        if (response.data.status === '1' && response.data.result) {
-          const safeGasPrice = response.data.result.SafeGasPrice;
-          console.log(`Etherscan safe gas price: ${safeGasPrice} gwei`);
-          return ethers.utils.parseUnits(safeGasPrice, 'gwei');
-        }
-      }
-    } catch (error: any) {
-      console.warn(`Failed to fetch gas price from Etherscan: ${error.message}`);
-    }
-
-    // Last resort fallback: Use 1 gwei
-    console.warn('⚠️  Using fallback gas price of 1 gwei');
-    return ethers.utils.parseUnits('1', 'gwei');
   }
 
   async postGameResultTweet(game: Game, winnerName: string, twapTxHash: string, tokensBurned: string) {
