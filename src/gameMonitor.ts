@@ -191,11 +191,13 @@ class GameMonitor {
       const winnerScore = score1 > score2 ? score1 : score2;
       const loserScore = score1 > score2 ? score2 : score1;
 
-      // Get team names without city (e.g., "Bears" from "Chicago Bears")
-      const winnerTeamName = winner.team.name;
-      const loserTeamName = loser.team.name;
+      // Get full loser team name (e.g., "New York Giants")
+      const loserFullName = loser.team.displayName;
 
-      const tweet = `${winnerName} ${winnerTeamName} defeat the ${loserTeamName} ${winnerScore}-${loserScore}, triggering a buyback-and-burn of ${tokensBurned} ${winnerName} tokens!
+      // Get token short name (e.g., "New England" from winnerName "New England Patriots")
+      const tokenShortName = TEAM_TOKENS[winnerName];
+
+      const tweet = `${winnerName} defeat the ${loserFullName} ${winnerScore}-${loserScore}, triggering a buyback-and-burn of ${tokensBurned} ${tokenShortName} tokens!
 
 https://etherscan.io/tx/${twapTxHash}`;
 
